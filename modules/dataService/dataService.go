@@ -43,6 +43,7 @@ func loadConfig() {
 func listenMQTT() {
 	var TSKVS services.TSKVService
 	var OtaDevice services.TpOtaDeviceService
+	var DataTranspond services.DataTranspondService // 数据转发服务
 	mqttHost := os.Getenv("TP_MQTT_HOST")
 	if mqttHost == "" {
 		mqttHost = viper.GetString("mqtt.broker")
@@ -74,11 +75,15 @@ func listenMQTT() {
 		_ = p.Submit(func() {
 			OtaDevice.OtaToinfromMsgProcOther(m.Payload(), m.Topic())
 		})
+	}, func(c mqtt.Client, m mqtt.Message) {
+		_ = p.Submit(func() {
+			OtaDevice.OtaToinfromMsgProcOther(m.Payload(), m.Topic())
+		})
 	})
 
 }
 
-//废弃
+// 废弃
 func ListenTCP() {
 	tcpPort := viper.GetString("tcp.port")
 	log.Printf("config of tcp port -- %s", tcpPort)

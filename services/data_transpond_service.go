@@ -4,6 +4,7 @@ import (
 	"ThingsPanel-Go/initialize/psql"
 	"ThingsPanel-Go/models"
 	valid "ThingsPanel-Go/validate"
+	"fmt"
 
 	"github.com/beego/beego/v2/core/logs"
 )
@@ -73,5 +74,12 @@ func (*DataTranspondService) DeleteDataTranspond(data_transpond models.DataTrans
 		//errors.Is(result.Error, gorm.ErrRecordNotFound)
 		return false
 	}
+	return true
+}
+
+// 处理数据转发
+func (*DataTranspondService) DealDataTranspond(body []byte, topic string) bool {
+	fmt.Println("body", body)
+	fmt.Println("topic", topic)
 	return true
 }
