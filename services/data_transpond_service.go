@@ -79,7 +79,7 @@ func (*DataTranspondService) DeleteDataTranspond(data_transpond models.DataTrans
 
 // 处理数据转发
 func (*DataTranspondService) DealDataTranspond(body []byte, topic string) bool {
-	fmt.Println("body", body)
 	fmt.Println("topic", topic)
+	fmt.Println("body:", string(body))
 	return true
 }
