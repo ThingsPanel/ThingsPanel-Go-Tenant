@@ -126,6 +126,9 @@ func init() {
 		web.NSRouter("business/delete", &controllers.BusinessController{}, "*:Delete"), //yewu-w
 		web.NSRouter("business/tree", &controllers.BusinessController{}, "*:Tree"),
 
+		// 业务和分组查询
+		web.NSRouter("business/asset/tree", &controllers.BusinessController{}, "*:BusinessAssetTree"),
+
 		// 设备新增
 		web.NSRouter("/device/add_only", &controllers.DeviceController{}, "*:AddOnly"),       //shebei-w
 		web.NSRouter("/device/update_only", &controllers.DeviceController{}, "*:UpdateOnly"), //shebei-w
@@ -322,6 +325,10 @@ func init() {
 		web.NSRouter("/tp_dashboard/edit", &controllers.TpDashboardController{}, "*:Edit"),
 		web.NSRouter("/tp_dashboard/delete", &controllers.TpDashboardController{}, "*:Delete"),
 
+		//可视化插件
+		web.NSRouter("/tp_vis_plugin/list", &controllers.TpVisPluginController{}, "*:List"),
+		web.NSRouter("/tp_vis_files/up", &controllers.TpVisPluginController{}, "*:Upload"),
+
 		//插件模块接口
 		web.NSRouter("/plugin/device/config", &controllers.DeviceController{}, "*:GetGatewayConfig"),
 		web.NSRouter("/form/config", &controllers.DeviceController{}, "*:GetProtocolForm"),
@@ -366,16 +373,19 @@ func init() {
 		web.NSRouter("/tp_ota/add", &controllers.TpOtaController{}, "*:Add"),
 		web.NSRouter("/tp_ota/list", &controllers.TpOtaController{}, "*:List"),
 		web.NSRouter("/tp_ota/delete", &controllers.TpOtaController{}, "*:Delete"),
+
 		//固件升级任务
 		//web.NSRouter("/tp_ota_task/modifystatus", &controllers.TpOtaTaskController{}, "*:ModifyStatus"),
 		web.NSRouter("/tp_ota_task/list", &controllers.TpOtaTaskController{}, "*:List"),
 		web.NSRouter("/tp_ota_task/add", &controllers.TpOtaTaskController{}, "*:Add"),
+		web.NSRouter("/tp_ota_task/delete", &controllers.TpOtaTaskController{}, "*:Delete"),
 
 		//固件升级设备
 		//web.NSRouter("/tp_ota_device/add", &controllers.TpOtaDeviceController{}, "*:Add"),
 		web.NSRouter("/tp_ota_device/list", &controllers.TpOtaDeviceController{}, "*:List"),
 		web.NSRouter("/tp_ota_device/modfiyupdate", &controllers.TpOtaDeviceController{}, "*:ModfiyUpdate"),
-
+		//固件下载断点续传
+		web.NSRouter("/ota/download/*", &controllers.TpOtaDeviceController{}, "get:Download"),
 		//WVP接口
 		web.NSRouter("/wvp/ptz", &controllers.WvpController{}, "*:PtzControl"),
 		web.NSRouter("/gb_record/query", &controllers.WvpController{}, "*:GetVideoList"),
@@ -406,6 +416,15 @@ func init() {
 		web.NSRouter("/v1/automation/log/detail/list", &controllers.TpAutomationLogDetailController{}, "*:List"),
 		web.NSRouter("/v1/scenario/log/list", &controllers.TpScenarioLogController{}, "*:List"),
 		web.NSRouter("/v1/scenario/log/detail/list", &controllers.TpScenarioLogDetailController{}, "*:List"),
+
+		// 通知组
+		web.NSRouter("/notification/list", &controllers.TpNotification{}, "*:List"),
+		web.NSRouter("/notification/save", &controllers.TpNotification{}, "*:Save"),
+		web.NSRouter("/notification/detail", &controllers.TpNotification{}, "*:Detail"),
+		web.NSRouter("/notification/delete", &controllers.TpNotification{}, "*:Delete"),
+		web.NSRouter("/notification/switch", &controllers.TpNotification{}, "*:Switch"),
+
+		web.NSRouter("/notification/test", &controllers.TpNotification{}, "*:Test"),
 	)
 
 	// 图表推送数据

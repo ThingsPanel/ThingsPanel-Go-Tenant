@@ -4,7 +4,7 @@ import (
 	"ThingsPanel-Go/initialize/psql"
 	"ThingsPanel-Go/initialize/redis"
 	"ThingsPanel-Go/models"
-	cm "ThingsPanel-Go/modules/dataService/mqtt"
+	sendmqtt "ThingsPanel-Go/modules/dataService/mqtt/sendMqtt"
 	tphttp "ThingsPanel-Go/others/http"
 	"ThingsPanel-Go/utils"
 	uuid "ThingsPanel-Go/utils"
@@ -740,14 +740,15 @@ func (*DeviceService) SendMessage(msg []byte, device *models.Device) error {
 		}
 		if device.Protocol == "mqtt" {
 			logs.Info("直连设备下行脚本处理后：", utils.ReplaceUserInput(string(msg)))
-			err = cm.Send(msg, device.Token)
+
+			err = sendmqtt.Send(msg, device.Token)
 		} else { // 协议设备
 			logs.Info("直连协议设备下行脚本处理后：", utils.ReplaceUserInput(string(msg)))
 			//获取协议插件订阅topic
 			var TpProtocolPluginService TpProtocolPluginService
 			pp := TpProtocolPluginService.GetByProtocolType(device.Protocol, "1")
 			var topic = pp.SubTopicPrefix + device.Token
-			err = cm.SendPlugin(msg, topic)
+			err = sendmqtt.SendPlugin(msg, topic)
 		}
 
 	} else if device.DeviceType == "3" && device.Protocol != "MQTT" { // 协议插件子设备
@@ -760,7 +761,7 @@ func (*DeviceService) SendMessage(msg []byte, device *models.Device) error {
 			if err != nil {
 				return err
 			}
-			err = cm.SendPlugin(msg, topic)
+			err = sendmqtt.SendPlugin(msg, topic)
 		} else { //其他协议插件
 			var gatewayDevice *models.Device
 			result := psql.Mydb.Where("id = ?", device.ParentId).First(&gatewayDevice) // 检测网关token是否存在
@@ -782,7 +783,7 @@ func (*DeviceService) SendMessage(msg []byte, device *models.Device) error {
 					return err
 				}
 				logs.Info("网关设备下行脚本处理后：", utils.ReplaceUserInput(string(msg)))
-				err = cm.SendPlugin(msgBytes, topic)
+				err = sendmqtt.SendPlugin(msgBytes, topic)
 			}
 		}
 
@@ -805,7 +806,7 @@ func (*DeviceService) SendMessage(msg []byte, device *models.Device) error {
 					return err
 				}
 				logs.Info("网关设备下行脚本处理后：", utils.ReplaceUserInput(string(msg)))
-				err = cm.SendGateWay(msg, gatewayDevice.Token, gatewayDevice.Protocol)
+				err = sendmqtt.SendGateWay(msg, gatewayDevice.Token, gatewayDevice.Protocol)
 			}
 		} else {
 			return errors.New("子设备网关不存在或子设备地址为空！")
@@ -1113,8 +1114,47 @@ func (*DeviceService) DeviceMapList(req valid.DeviceMapValidate, tenantId string
 func (*DeviceService) GetDeviceOnlineStatus(deviceIdList valid.DeviceIdListValidate) (map[string]interface{}, error) {
 	var deviceOnlineStatus = make(map[string]interface{})
 	for _, deviceId := range deviceIdList.DeviceIdList {
+		var device models.Device
+		//根据阈值判断设备是否在线
+		result := psql.Mydb.Where("id = ?", deviceId).First(&device)
+		if result.Error != nil {
+			logs.Error(result.Error)
+			if result.Error == gorm.ErrRecordNotFound {
+				deviceOnlineStatus[deviceId] = "0"
+				continue
+			}
+		}
+		if device.Protocol == "mqtt" || device.Protocol == "MQTT" {
+
+			if device.AdditionalInfo != "" {
+				aJson, err := simplejson.NewJson([]byte(device.AdditionalInfo))
+				if err == nil {
+					thresholdTime, err := aJson.Get("runningInfo").Get("thresholdTime").Int64()
+
+					if err == nil && thresholdTime != 0 {
+						//获取最新的数据时间
+						var latest_ts int64
+						result = psql.Mydb.Model(&models.TSKVLatest{}).Select("max(ts) as ts").Where("entity_id = ? ", deviceId).Group("entity_type").First(&latest_ts)
+						if result.Error != nil {
+							logs.Error(result.Error)
+						}
+						if latest_ts != 0 {
+							if time.Now().UnixMicro()-latest_ts >= int64(thresholdTime*1e6) {
+								deviceOnlineStatus[deviceId] = "0"
+							} else {
+								deviceOnlineStatus[deviceId] = "1"
+							}
+							continue
+						}
+					}
+				}
+			}
+
+		}
+
+		//原流程
 		var tskvLatest models.TSKVLatest
-		result := psql.Mydb.Model(&models.TSKVLatest{}).Where("entity_id = ? and key = 'SYS_ONLINE'", deviceId).First(&tskvLatest)
+		result = psql.Mydb.Model(&models.TSKVLatest{}).Where("entity_id = ? and key = 'SYS_ONLINE'", deviceId).First(&tskvLatest)
 		logs.Info("------------------------------------------------ceshi")
 		if result.Error != nil {
 			logs.Error(result.Error)
@@ -1157,6 +1197,26 @@ func (*DeviceService) SendCommandToDevice(
 	commandDesc string,
 ) error {
 
+	// 格式化内容：
+	var sendStruct struct {
+		Method string      `json:"method"`
+		Params interface{} `json:"params"`
+	}
+
+	commandDataMap := make(map[string]interface{})
+	err := json.Unmarshal(commandData, &commandDataMap)
+	if err != nil {
+		return err
+	}
+	sendStruct.Method = commandIdentifier
+	sendStruct.Params = commandDataMap
+	msg, err := json.Marshal(sendStruct)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("d", sendStruct)
+
 	topic := viper.GetString("mqtt.topicToCommand") + "/"
 	sendRes := 2
 	switch device.DeviceType {
@@ -1166,7 +1226,19 @@ func (*DeviceService) SendCommandToDevice(
 		topic += device.Token
 		fmt.Println("topic-2:", topic)
 
-		if cm.SendMQTT(commandData, topic, 1) == nil {
+		// 协议设备topic
+		if device.Protocol != "mqtt" && device.Protocol != "MQTT" {
+			var tpProtocolPluginService TpProtocolPluginService
+			pp := tpProtocolPluginService.GetByProtocolType(device.Protocol, device.DeviceType)
+			topic = pp.SubTopicPrefix + "command/" + device.Token
+		}
+		// 通过脚本
+		msg, err := scriptDealB(device.ScriptId, msg, topic)
+		if err != nil {
+			return err
+		}
+
+		if sendmqtt.SendMQTT(msg, topic, 1) == nil {
 			sendRes = 1
 		}
 
@@ -1175,7 +1247,7 @@ func (*DeviceService) SendCommandToDevice(
 			commandIdentifier,
 			commandName,
 			commandDesc,
-			string(commandData),
+			string(msg),
 			sendRes)
 
 	case models.DeviceTypeSubGatway:
@@ -1188,7 +1260,19 @@ func (*DeviceService) SendCommandToDevice(
 			}
 			topic += gatewayDevice.Token
 
-			if cm.SendMQTT(commandData, topic, 1) == nil {
+			// 协议设备topic
+			if gatewayDevice.Protocol != "mqtt" && gatewayDevice.Protocol != "MQTT" {
+				var tpProtocolPluginService TpProtocolPluginService
+				pp := tpProtocolPluginService.GetByProtocolType(gatewayDevice.Protocol, gatewayDevice.DeviceType)
+				topic = pp.SubTopicPrefix + "command/" + gatewayDevice.Token
+			}
+
+			msg, err := scriptDealB(gatewayDevice.ScriptId, msg, topic)
+			if err != nil {
+				return err
+			}
+			// 通过脚本
+			if sendmqtt.SendMQTT(msg, topic, 1) == nil {
 				sendRes = 1
 			}
 
@@ -1197,7 +1281,7 @@ func (*DeviceService) SendCommandToDevice(
 				commandIdentifier,
 				commandName,
 				commandDesc,
-				string(commandData),
+				string(msg),
 				sendRes)
 		}
 

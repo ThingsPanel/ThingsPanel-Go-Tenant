@@ -547,7 +547,7 @@ func (c *DeviceController) Operating() {
 	ConditionsLog := models.ConditionsLog{
 		DeviceId:      deviceData.ID,
 		OperationType: "2",
-		Instruct:      instruct,
+		Instruct:      string(newPayload),
 		ProtocolType:  "mqtt",
 		CteateTime:    time.Now().Format("2006-01-02 15:04:05"),
 		TenantId:      deviceData.TenantId,
@@ -1021,6 +1021,7 @@ func (c *DeviceController) DeviceCommandList() {
 	err := json.Unmarshal(c.Ctx.Input.RequestBody, &inputData)
 	if err != nil || len(inputData.DeviceId) == 0 {
 		response.SuccessWithMessage(400, err.Error(), (*context2.Context)(c.Ctx))
+		return
 	}
 
 	var device services.DeviceService
@@ -1030,16 +1031,17 @@ func (c *DeviceController) DeviceCommandList() {
 	// 没有设备或者没有绑定device_model
 	if len(deviceInfo.Type) == 0 {
 		response.SuccessWithMessage(400, err.Error(), (*context2.Context)(c.Ctx))
+		return
 	}
 
 	// 根据device.type，查询device_model.id
 	var deviceModel services.DeviceModelService
-	data, err := deviceModel.GetModelCommandsByPluginId(deviceInfo.Type)
+	data, _ := deviceModel.GetModelCommandsByPluginId(deviceInfo.Type)
 
-	if err != nil {
-		response.SuccessWithMessage(400, err.Error(), (*context2.Context)(c.Ctx))
-		return
-	}
+	// if err != nil {
+	// 	response.SuccessWithMessage(400, err.Error(), (*context2.Context)(c.Ctx))
+	// 	return
+	// }
 
 	response.SuccessWithDetailed(200, "success", data, map[string]string{}, (*context2.Context)(c.Ctx))
 }
@@ -1050,17 +1052,21 @@ func (c *DeviceController) DeviceCommandSend() {
 	err := json.Unmarshal(c.Ctx.Input.RequestBody, &inputData)
 	if err != nil {
 		response.SuccessWithMessage(400, err.Error(), (*context2.Context)(c.Ctx))
+		return
 	}
 
 	var d services.DeviceService
 	device, i := d.Token(inputData.DeviceId)
 	if i == 0 {
 		response.SuccessWithMessage(400, "no device", (*context2.Context)(c.Ctx))
+		return
 	}
 
-	if device.Protocol != "mqtt" && device.Protocol != "MQTT" {
-		response.SuccessWithMessage(400, "protocol error", (*context2.Context)(c.Ctx))
-	}
+	// if device.Protocol != "mqtt" && device.Protocol != "MQTT" {
+	// 	response.SuccessWithMessage(400, "protocol error", (*context2.Context)(c.Ctx))
+	// }
+
+	//
 
 	d.SendCommandToDevice(
 		device, inputData.CommandIdentifier,

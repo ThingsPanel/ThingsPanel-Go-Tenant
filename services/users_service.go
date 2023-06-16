@@ -124,16 +124,6 @@ func (*UserService) GetUserAuthorityById(id string) (string, string, error) {
 	return users.Authority, users.TenantID, nil
 }
 
-// 通过用户id和租户id获取用户信息
-func (*UserService) GetUserByIdAndTenantId(id string, tenantId string) (*models.Users, error) {
-	var users models.Users
-	result := psql.Mydb.Where("id = ? AND tenant_id = ?", id, tenantId).First(&users)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	return &users, nil
-}
-
 // Paginate 分页获取user数据
 func (*UserService) Paginate(name string, offset int, pageSize int, authority string, tenantId string) ([]PaginateUser, int64, error) {
 	var paginateUsers []PaginateUser
@@ -219,16 +209,27 @@ func (*UserService) AddUser(user valid.AddUser) (userModel models.Users, err err
 
 // 根据ID编辑一条user数据
 func (*UserService) Edit(id string, name string, email string, mobile string, remark string, enabled string) bool {
-	result := psql.Mydb.Model(&models.Users{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"name":       name,
-		"email":      email,
-		"mobile":     mobile,
-		"remark":     remark,
-		"updated_at": time.Now().Unix(),
-		"enabled":    enabled,
-	})
+
+	var result *gorm.DB
+	if len(enabled) == 0 {
+		result = psql.Mydb.Model(&models.Users{}).Where("id = ?", id).Updates(map[string]interface{}{
+			"name":       name,
+			"email":      email,
+			"mobile":     mobile,
+			"remark":     remark,
+			"updated_at": time.Now().Unix(),
+		})
+	} else {
+		result = psql.Mydb.Model(&models.Users{}).Where("id = ?", id).Updates(map[string]interface{}{
+			"name":       name,
+			"email":      email,
+			"mobile":     mobile,
+			"remark":     remark,
+			"updated_at": time.Now().Unix(),
+			"enabled":    enabled,
+		})
+	}
 	if result.Error != nil {
-		//errors.Is(result.Error, gorm.ErrRecordNotFound)
 		logs.Error(result.Error.Error())
 		return false
 	}

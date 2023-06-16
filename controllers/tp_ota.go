@@ -84,7 +84,7 @@ func (c *TpOtaController) Add() {
 	}
 
 	// 判断文件是否存在|| !utils.FileExist(reqData.PackageUrl)
-	path := "." + utils.GetUrlPath(reqData.PackageUrl)
+	path := "." + utils.GetUrlPath(reqData.PackageUrl)[17:]
 	if !utils.FileExist(path) {
 		utils.SuccessWithMessage(400, "升级包不存在", (*context2.Context)(c.Ctx))
 		return
@@ -130,7 +130,7 @@ func (c *TpOtaController) Add() {
 		AdditionalInfo:     reqData.AdditionalInfo,
 		CreatedAt:          time.Now().Unix(),
 		Sign:               packagesign,
-		FileSize:           utils.FormatFileSize(packageLength),
+		FileSize:           fmt.Sprintf("%d", packageLength),
 		TenantId:           tenantId,
 	}
 	d, rsp_err := TpOtaService.AddTpOta(TpOta)
